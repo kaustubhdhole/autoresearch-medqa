@@ -52,8 +52,29 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+FEW_SHOT_EXAMPLES = [
+    {
+        "question": "A 23-year-old pregnant woman at 22 weeks gestation presents with burning upon urination. She states it started 1 day ago and has been worsening despite drinking more water and taking cranberry extract. She otherwise feels well and is followed by a doctor for her pregnancy. Her temperature is 97.7°F (36.5°C), blood pressure is 122/77 mmHg, pulse is 80/min, respirations are 19/min, and oxygen saturation is 98% on room air. Physical exam is notable for an absence of costovertebral angle tenderness and a gravid uterus. Which of the following is the best treatment for this patient?",
+        "options": "A. Ampicillin\nB. Ceftriaxone\nC. Doxycycline\nD. Nitrofurantoin",
+        "answer": "Nitrofurantoin"
+    },
+    {
+        "question": "A 20-year-old woman presents with menorrhagia for the past several years. She says that her menses “have always been heavy”, and she has experienced easy bruising for as long as she can remember. Family history is significant for her mother, who had similar problems with bruising easily. The patient's vital signs include: heart rate 98/min, respiratory rate 14/min, temperature 36.1°C (96.9°F), and blood pressure 110/87 mm Hg. Physical examination is unremarkable. Laboratory tests show the following: platelet count 200,000/mm3, PT 12 seconds, and PTT 43 seconds. Which of the following is the most likely cause of this patient’s symptoms?",
+        "options": "A. Hemophilia A\nB. Lupus anticoagulant\nC. Protein C deficiency\nD. Von Willebrand disease",
+        "answer": "Von Willebrand disease"
+    },
+    {
+        "question": "A 1-year-old boy presents to the emergency department with weakness and a change in his behavior. His parents state that they first noticed the change in his behavior this morning and it has been getting worse. They noticed the patient was initially weak in his upper body and arms, but now he won’t move his legs with as much strength or vigor as he used to. Physical exam is notable for bilateral ptosis with a sluggish pupillary response, a very weak sucking and gag reflex, and shallow respirations. The patient is currently drooling and his diaper is dry. The parents state he has not had a bowel movement in over 1 day. Which of the following is the pathophysiology of this patient’s condition?",
+        "options": "A. Autoantibodies against the presynaptic voltage-gated calcium channels\nB. Autoimmune demyelination of peripheral nerves\nC. Blockade of presynaptic acetylcholine release at the neuromuscular junction\nD. Lower motor neuron destruction in the anterior horn",
+        "answer": "Blockade of presynaptic acetylcholine release at the neuromuscular junction"
+    }
+]
+
+
 def main() -> None:
     args = parse_args()
+    if args.limit == DEFAULT_EVAL_LIMIT:
+        args.limit = 128  # Use smaller limit for reasoning/few-shot iteration
     AutoModelForCausalLM, AutoTokenizer = _require_transformers()
 
     t0 = time.time()
@@ -67,16 +88,26 @@ def main() -> None:
     model.eval()
 
     def predict(prompt: str) -> str:
+        few_shot_text = ""
+        for ex in FEW_SHOT_EXAMPLES:
+            few_shot_text += f"Question:\n{ex['question']}\n\nChoices:\n{ex['options']}\n\nFinal short answer: {ex['answer']}\n\n---\n\n"
+        
+        full_prompt = (
+            "You are a precise medical assistant. Below are examples of medical questions and their short-phrase answers.\n\n"
+            f"{few_shot_text}"
+            f"{prompt}"
+        )
+
         messages = [
-            {"role": "system", "content": "You are a precise medical exam assistant."},
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": "You are a precise medical exam assistant. Answer with only the short phrase."},
+            {"role": "user", "content": full_prompt},
         ]
         try:
             input_ids = tokenizer.apply_chat_template(
                 messages,
                 tokenize=True,
                 add_generation_prompt=True,
-                enable_thinking=False,
+                enable_thinking=True,
                 return_tensors="pt",
             )
         except TypeError:
@@ -88,7 +119,7 @@ def main() -> None:
             )
         input_ids = input_ids.to(model.device)
         kwargs = {
-            "max_new_tokens": args.max_new_tokens,
+            "max_new_tokens": max(args.max_new_tokens, 2048),
             "do_sample": args.temperature > 0,
             "pad_token_id": tokenizer.eos_token_id,
         }
