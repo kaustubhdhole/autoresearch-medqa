@@ -1,0 +1,5 @@
+commit	short_answer_accuracy	memory_gb	status	description
+570c205	0.599609	15.81	keep	baseline (fixed infrastructure)
+26d1d69	0.000000	0.0	crash	few-shot thinking prompt timed out before first checkpoint
+5533592	0.593750	15.60	discard	bounded non-thinking three-shot prompt
+b103429	0.599609	15.45	keep	direct exam system prompt without few-shot examples
