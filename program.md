@@ -9,7 +9,8 @@ You may change these files during this redesign:
 - `prepare.py` — loads `bigbio/med_qa` from Hugging Face, writes normalized local JSONL splits, formats prompts, and owns the short-answer-match evaluation. The metric logic must stay here and must not be copied into `train.py`.
 - `train.py` — loads/prompts `Qwen/Qwen3-8B`, defines generation behavior, calls the evaluator from `prepare.py`, and prints the final metrics.
 
-Do not hide or duplicate evaluation logic in `train.py`. `train.py` may tune prompting, generation settings, batching, decoding, ensembling, add medical rules, or model-loading choices, but it should treat evaluation as an imported black-box helper from `prepare.py`.
+Do not hide or duplicate evaluation logic in `train.py`. 
+`train.py` may tune prompting, generation settings, batching, decoding, ensembling, add medical rules, or model-loading choices, but it should treat evaluation as an imported black-box helper from `prepare.py`.
 
 ## Setup
 
