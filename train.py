@@ -73,8 +73,6 @@ FEW_SHOT_EXAMPLES = [
 
 def main() -> None:
     args = parse_args()
-    if args.limit == DEFAULT_EVAL_LIMIT:
-        args.limit = 128  # Use smaller limit for reasoning/few-shot iteration
     AutoModelForCausalLM, AutoTokenizer = _require_transformers()
 
     t0 = time.time()
@@ -107,7 +105,7 @@ def main() -> None:
                 messages,
                 tokenize=True,
                 add_generation_prompt=True,
-                enable_thinking=True,
+                enable_thinking=False,
                 return_tensors="pt",
             )
         except TypeError:
@@ -119,7 +117,7 @@ def main() -> None:
             )
         input_ids = input_ids.to(model.device)
         kwargs = {
-            "max_new_tokens": max(args.max_new_tokens, 2048),
+            "max_new_tokens": args.max_new_tokens,
             "do_sample": args.temperature > 0,
             "pad_token_id": tokenizer.eos_token_id,
         }
