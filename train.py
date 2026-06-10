@@ -24,6 +24,9 @@ from prepare import (
     evaluate_short_answer_accuracy,
 )
 
+# Redirect default cache to local scratch
+os.environ.setdefault("HF_HOME", "/local/scratch/kdhole/.cache/huggingface")
+os.environ.setdefault("XDG_CACHE_HOME", "/local/scratch/kdhole/.cache")
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
 
@@ -92,8 +95,13 @@ def main() -> None:
         if args.temperature > 0:
             kwargs["temperature"] = args.temperature
         with torch.inference_mode():
-            output_ids = model.generate(input_ids, **kwargs)
-        generated = output_ids[0, input_ids.shape[-1] :]
+            if isinstance(input_ids, torch.Tensor):
+                output_ids = model.generate(input_ids, **kwargs)
+                input_len = input_ids.shape[-1]
+            else:
+                output_ids = model.generate(**input_ids, **kwargs)
+                input_len = input_ids["input_ids"].shape[-1]
+        generated = output_ids[0, input_len:]
         return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
     result = evaluate_short_answer_accuracy(predict, split=args.split, limit=args.limit)

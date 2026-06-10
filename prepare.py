@@ -26,7 +26,11 @@ MODEL_NAME = "Qwen/Qwen3-8B"
 DATASET_NAME = "bigbio/med_qa"
 DATASET_CONFIG = "med_qa_en_4options_source"
 
-CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "autoresearch-medqa")
+# Redirect default cache to local scratch
+os.environ.setdefault("HF_HOME", "/local/scratch/kdhole/.cache/huggingface")
+os.environ.setdefault("XDG_CACHE_HOME", "/local/scratch/kdhole/.cache")
+
+CACHE_DIR = "/local/scratch/kdhole/.cache/autoresearch-medqa"
 DATA_DIR = os.path.join(CACHE_DIR, "data")
 TRAIN_PATH = os.path.join(DATA_DIR, "train.jsonl")
 VAL_PATH = os.path.join(DATA_DIR, "validation.jsonl")
@@ -67,7 +71,12 @@ def _option_sort_key(opt: dict[str, str]):
 
 
 def _coerce_example(raw: dict, split: str, idx: int) -> MedQAExample:
-    options = list(raw.get("options", []))
+    raw_options = raw.get("options", {})
+    if isinstance(raw_options, dict):
+        options = [{"key": k, "value": v} for k, v in raw_options.items()]
+    else:
+        options = list(raw_options)
+
     options = sorted(options, key=_option_sort_key)
     return MedQAExample(
         id=f"{split}-{idx}",
@@ -89,16 +98,37 @@ def _write_jsonl(path: str, rows: Iterable[MedQAExample]) -> int:
 
 
 def prepare_data() -> None:
-    """Download MedQA from Hugging Face and normalize it to local JSONL files."""
+    """Download MedQA from Hugging Face or use local data_raw and normalize it."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    load_dataset = _require_datasets()
-    ds = load_dataset(DATASET_NAME, DATASET_CONFIG, trust_remote_code=True)
+
+    local_raw_paths = {
+        "train": "data_raw/phrases_no_exclude_train.jsonl",
+        "validation": "data_raw/phrases_no_exclude_dev.jsonl",
+        "test": "data_raw/phrases_no_exclude_test.jsonl",
+    }
 
     counts: dict[str, int] = {}
     split_to_path = {"train": TRAIN_PATH, "validation": VAL_PATH, "test": TEST_PATH}
-    for split, path in split_to_path.items():
-        rows = (_coerce_example(ex, split, i) for i, ex in enumerate(ds[split]))
-        counts[split] = _write_jsonl(path, rows)
+
+    if all(os.path.exists(p) for p in local_raw_paths.values()):
+        print("Using local data_raw files...")
+        for split, raw_path in local_raw_paths.items():
+            def gen_rows():
+                with open(raw_path, "r", encoding="utf-8") as f:
+                    for i, line in enumerate(f):
+                        yield _coerce_example(json.loads(line), split, i)
+            counts[split] = _write_jsonl(split_to_path[split], gen_rows())
+    else:
+        print("Local data_raw not found. Attempting to load from Hugging Face...")
+        try:
+            load_dataset = _require_datasets()
+            ds = load_dataset(DATASET_NAME, DATASET_CONFIG, trust_remote_code=True)
+            for split, path in split_to_path.items():
+                rows = (_coerce_example(ex, split, i) for i, ex in enumerate(ds[split]))
+                counts[split] = _write_jsonl(path, rows)
+        except Exception as e:
+            print(f"Failed to load from Hugging Face: {e}")
+            raise
 
     metadata = {
         "dataset": DATASET_NAME,

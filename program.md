@@ -26,7 +26,7 @@ The preparation script loads:
 load_dataset("bigbio/med_qa", "med_qa_en_4options_source", trust_remote_code=True)
 ```
 
-It writes normalized splits under `~/.cache/autoresearch-medqa/data/`.
+It writes normalized splits under `/local/scratch/kdhole/.cache/autoresearch-medqa/data/`.
 
 If your environment does not already have the Hugging Face libraries, install or inject them before running:
 
